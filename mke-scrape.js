@@ -7,18 +7,27 @@ const app = require("express")();
 
 dotenv.config();
 
-const port = process.env.PORT;
-const mongoUrl = process.env.MONGO_URL;
+const port = 55555;
+const mongoUrl =
+  process.env.MONGO_URL ||
+  "mongodb+srv://" +
+    process.env.MONGO_USER +
+    ":" +
+    encodeURIComponent(process.env.MONGO_PASSWORD) +
+    "@" +
+    process.env.MONGO_HOST +
+    "/?retryWrites=true&w=majority";
 const client = new MongoClient(mongoUrl);
 const interval = 1000 * 60 * 15;
 
 const scrape = () => {
   console.log("Scraping", new Date());
   axios
-    .get(process.env.MKE_URL)
+    .get("https://itmdapps.milwaukee.gov/MPDCallData/")
     .then(async (res) => {
       try {
         const items = Array.from(parse(res.data).getElementsByTagName("tr"));
+        console.log("items", items.length);
         const db = client.db("mke-logs");
         for (let i = 0; i < items.length; i++) {
           const item = items[i];
@@ -31,7 +40,7 @@ const scrape = () => {
             .update(JSON.stringify(cells))
             .digest("hex");
           const check = await db.collection("logs").findOne({ hash: hash });
-          if (!check)
+          if (!check) {
             await db.collection("logs").insertOne({
               _id: crypto.randomBytes(8).toString("hex"),
               hash: hash,
@@ -42,6 +51,7 @@ const scrape = () => {
               natureOfCall: cells[4],
               status: cells[5],
             });
+          }
         }
       } catch (err) {
         console.log("Data parse error", err);
